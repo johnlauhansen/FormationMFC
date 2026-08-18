@@ -207,6 +207,7 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="ViewTree.h" />
     <ClInclude Include="VisualiseurLogs.h" />
+    <ClInclude Include="MappedFile.h" />
     <ClInclude Include="VisualiseurLogsDoc.h" />
     <ClInclude Include="VisualiseurLogsView.h" />
   </ItemGroup>
@@ -225,6 +226,7 @@
     <ClCompile Include="PropertiesWnd.cpp" />
     <ClCompile Include="ViewTree.cpp" />
     <ClCompile Include="VisualiseurLogs.cpp" />
+    <ClCompile Include="MappedFile.cpp" />
     <ClCompile Include="VisualiseurLogsDoc.cpp" />
     <ClCompile Include="VisualiseurLogsView.cpp" />
   </ItemGroup>

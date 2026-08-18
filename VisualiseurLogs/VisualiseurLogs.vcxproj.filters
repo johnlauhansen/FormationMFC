@@ -30,6 +30,9 @@
     <ClInclude Include="ChildFrm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="MappedFile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="VisualiseurLogsDoc.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -66,6 +69,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ChildFrm.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MappedFile.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="VisualiseurLogsDoc.cpp">
