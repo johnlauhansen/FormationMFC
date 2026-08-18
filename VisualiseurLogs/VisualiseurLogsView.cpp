@@ -296,9 +296,23 @@ LRESULT CVisualiseurLogsView::OnFindReplace(WPARAM wParam, LPARAM lParam)
 		return 0;
 	}
 
+	// Cas 1 : L'utilisateur a cliqué sur "Annuler" ou a fermé la boîte de dialogue "Rechercher"
 	if (m_pFindDlg->IsTerminating())
 	{
 		m_pFindDlg = nullptr;
+
+		// SÉCURITÉ & ERGONOMIE : On retire automatiquement le filtre de recherche pour restaurer l'affichage intégral du fichier
+		CVisualiseurLogsDoc* pDoc = GetDocument();
+		if (pDoc != nullptr)
+		{
+			pDoc->ClearFilter();
+
+			CFrameWnd* pMainWnd = static_cast<CFrameWnd*>(AfxGetMainWnd());
+			if (pMainWnd != nullptr)
+			{
+				pMainWnd->SetMessageText(_T("Filtre de recherche annulé. Affichage de l'intégralité des lignes."));
+			}
+		}
 		return 0;
 	}
 
@@ -314,7 +328,8 @@ LRESULT CVisualiseurLogsView::OnFindReplace(WPARAM wParam, LPARAM lParam)
 				pMainWnd->SetMessageText(_T("Recherche lancée..."));
 			}
 			
-			pDoc->StartSearch(strFind, GetSafeHwnd());
+			// Démarre la recherche asynchrone en passant le dictionnaire MatchCase (Case-Sensitive ou non)
+			pDoc->StartSearch(strFind, m_pFindDlg->MatchCase() == TRUE, GetSafeHwnd());
 		}
 	}
 

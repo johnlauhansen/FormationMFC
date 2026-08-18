@@ -35,9 +35,10 @@ public:
 	/**
 	 * @brief Démarre une recherche textuelle asynchrone dans un thread secondaire.
 	 * @param strSearchText Texte recherché (mot-clé).
+	 * @param bMatchCase Indique si la recherche doit respecter la casse (Case-Sensitive).
 	 * @param hViewWnd HWND de la vue qui recevra les messages de notification d'avancement.
 	 */
-	void StartSearch(const CString& strSearchText, HWND hViewWnd);
+	void StartSearch(const CString& strSearchText, bool bMatchCase, HWND hViewWnd);
 
 	/**
 	 * @brief Annule immédiatement la recherche asynchrone en cours si elle existe.
@@ -106,9 +107,10 @@ private:
 	 *
 	 * @param targetUTF8 Terme de recherche pré-converti en UTF-8.
 	 * @param targetANSI Terme de recherche pré-converti en ANSI.
+	 * @param bMatchCase Indique si la recherche doit respecter la casse (Case-Sensitive).
 	 * @param hViewWnd Fenêtre recevant les messages d'UI de progression.
 	 */
-	void PerformSearchInternal(std::string targetUTF8, std::string targetANSI, HWND hViewWnd);
+	void PerformSearchInternal(std::string targetUTF8, std::string targetANSI, bool bMatchCase, HWND hViewWnd);
 
 private:
 	CMappedFile m_mappedFile;

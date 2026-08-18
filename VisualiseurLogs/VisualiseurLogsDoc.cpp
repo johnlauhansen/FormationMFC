@@ -321,7 +321,46 @@ CString CVisualiseurLogsDoc::GetLine(size_t index) const
  * @param strSearchText Texte recherché (mot-clé).
  * @param hViewWnd HWND de la vue réceptrice des notifications.
  */
-void CVisualiseurLogsDoc::StartSearch(const CString& strSearchText, HWND hViewWnd)
+#include <algorithm>
+#include <cctype>
+
+/**
+ * @brief Helper statique pour effectuer une recherche de sous-chaîne sans tenir compte de la casse (Case-Insensitive).
+ * 
+ * SÉCURITÉ & PERFORMANCE : Utilise std::search pour éviter toute allocation mémoire.
+ *
+ * @param hack Chaîne de caractères dans laquelle on effectue la recherche.
+ * @param search Chaîne recherchée.
+ * @return true si search est présente dans hack, false sinon.
+ */
+static bool ContainsIgnoreCase(std::string_view hack, std::string_view search)
+{
+	if (search.empty()) return true;
+	if (hack.size() < search.size()) return false;
+
+	auto it = std::search(
+		hack.begin(), hack.end(),
+		search.begin(), search.end(),
+		[](char ch1, char ch2) {
+			return std::tolower(static_cast<unsigned char>(ch1)) == std::tolower(static_cast<unsigned char>(ch2));
+		}
+	);
+	return it != hack.end();
+}
+
+/**
+ * @brief Démarre une recherche textuelle asynchrone dans un thread secondaire de manière ultra-rapide.
+ * 
+ * SÉCURITÉ SONAR & COHÉRENCE MULTITHREAD (cpp:S1188 & cpp:S5962) : 
+ * Pour éviter toute corruption de données ou de conversion de CString à travers les threads (les macros de conversion
+ * ATL utilisent un cache local au thread principal), nous convertissons le mot-clé de recherche en std::string (UTF-8 et ANSI)
+ * sur le thread principal (UI) où l'environnement est garanti sain, puis nous passons ces objets std::string par valeur au thread.
+ *
+ * @param strSearchText Texte recherché (mot-clé).
+ * @param bMatchCase Indique si la recherche doit respecter la casse (Case-Sensitive).
+ * @param hViewWnd HWND de la vue réceptrice des notifications.
+ */
+void CVisualiseurLogsDoc::StartSearch(const CString& strSearchText, bool bMatchCase, HWND hViewWnd)
 {
 	CancelSearch(); // Sécurité : on arrête et rejoint une recherche en cours
 
@@ -340,18 +379,21 @@ void CVisualiseurLogsDoc::StartSearch(const CString& strSearchText, HWND hViewWn
 	std::string targetANSI = CW2A(strSearchText, CP_ACP);
 
 	// Lancement conforme du thread secondaire en lui passant les chaînes std::string copiées par valeur
-	m_searchThread = std::thread(&CVisualiseurLogsDoc::PerformSearchInternal, this, targetUTF8, targetANSI, hViewWnd);
+	m_searchThread = std::thread(&CVisualiseurLogsDoc::PerformSearchInternal, this, targetUTF8, targetANSI, bMatchCase, hViewWnd);
 }
 
 /**
  * @brief Méthode interne exécutée sur le thread de recherche secondaire (conforme cpp:S1188).
- * Scanne la mémoire brute projetée en utilisant std::string_view::find (zéro allocation de chaîne).
+ * Scanne la mémoire brute projetée en utilisant std::string_view et std::search (zéro allocation de chaîne).
+ *
+ * Supporte la recherche sensible ou insensible à la casse de manière ultra-rapide.
  *
  * @param targetUTF8 Terme de recherche pré-converti en UTF-8.
  * @param targetANSI Terme de recherche pré-converti en ANSI.
+ * @param bMatchCase Indique si la recherche respecte la casse (Case-Sensitive).
  * @param hViewWnd Fenêtre recevant les messages d'UI de progression.
  */
-void CVisualiseurLogsDoc::PerformSearchInternal(std::string targetUTF8, std::string targetANSI, HWND hViewWnd)
+void CVisualiseurLogsDoc::PerformSearchInternal(std::string targetUTF8, std::string targetANSI, bool bMatchCase, HWND hViewWnd)
 {
 	std::vector<size_t> localMatches;
 	const char* pData = m_mappedFile.GetData();
@@ -369,7 +411,7 @@ void CVisualiseurLogsDoc::PerformSearchInternal(std::string targetUTF8, std::str
 		uint64_t start = m_lineOffsets[i];
 		uint64_t end = (i + 1 < totalLines) ? m_lineOffsets[i + 1] : fileSize;
 
-		size_t length = static_cast<size_t>(end - start);
+		size_t length = end - start;
 		while (length > 0 && (pData[start + length - 1] == '\r' || pData[start + length - 1] == '\n'))
 		{
 			length--;
@@ -379,18 +421,28 @@ void CVisualiseurLogsDoc::PerformSearchInternal(std::string targetUTF8, std::str
 		{
 			std::string_view lineView(pData + start, length);
 			
-			// Recherche de sous-chaîne brute ultra-rapide (sans allocation mémoire)
-			if (lineView.find(targetUTF8) != std::string_view::npos ||
-				(targetUTF8 != targetANSI && lineView.find(targetANSI) != std::string_view::npos))
+			if (bMatchCase)
 			{
-				localMatches.push_back(i);
+				if (lineView.find(targetUTF8) != std::string_view::npos ||
+					(targetUTF8 != targetANSI && lineView.find(targetANSI) != std::string_view::npos))
+				{
+					localMatches.push_back(i);
+				}
+			}
+			else
+			{
+				if (ContainsIgnoreCase(lineView, targetUTF8) ||
+					(targetUTF8 != targetANSI && ContainsIgnoreCase(lineView, targetANSI)))
+				{
+					localMatches.push_back(i);
+				}
 			}
 		}
 
 		// Notification d'avancement de manière régulière à la boucle de messages UI (toutes les 50k lignes ou fin)
 		if (i > 0 && (i % 50000 == 0 || i == totalLines - 1))
 		{
-			int progress = static_cast<int>((i * 100) / totalLines);
+			auto progress = static_cast<int>((i * 100) / totalLines);
 			::PostMessage(hViewWnd, WM_USER + 100, static_cast<WPARAM>(progress), static_cast<LPARAM>(localMatches.size()));
 		}
 	}
@@ -401,7 +453,7 @@ void CVisualiseurLogsDoc::PerformSearchInternal(std::string targetUTF8, std::str
 		m_tempMatches = std::move(localMatches);
 
 		// Envoi du message final (WM_USER + 101) indiquant le nombre de résultats trouvés
-		::PostMessage(hViewWnd, WM_USER + 101, static_cast<WPARAM>(m_tempMatches.size()), 0);
+		::PostMessage(hViewWnd, WM_USER + 101, m_tempMatches.size(), 0);
 	}
 
 	m_isSearching = false;
@@ -414,7 +466,7 @@ void CVisualiseurLogsDoc::PerformSearchInternal(std::string targetUTF8, std::str
  * Un objet std::thread reste "joinable" tant qu'on n'a pas appelé join() dessus, même si le thread a fini
  * de s'exécuter naturellement. Si on tente d'affecter un nouveau thread à un objet std::thread encore "joinable",
  * le runtime C++ déclenche immédiatement un appel à std::terminate() / abort().
- * Nous devons donc impérativement appeler join() dès que le thread est joinable(), peu importe l'état de m_isSearching.
+ * join() doit être appelé dès que le thread est joinable(), peu importe l'état de m_isSearching.
  */
 void CVisualiseurLogsDoc::CancelSearch()
 {
