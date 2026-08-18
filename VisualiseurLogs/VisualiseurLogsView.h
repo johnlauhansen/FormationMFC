@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <afxdlgs.h> // Requis pour CFindReplaceDialog
 
 class CVisualiseurLogsView : public CListView
 {
@@ -22,6 +23,7 @@ public:
 public:
 	virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
 	virtual void OnInitialUpdate();
+	virtual BOOL PreTranslateMessage(MSG* pMsg) override;
 protected:
 	virtual void OnUpdate(CView* pSender, LPARAM lHint, CObject* pHint) override;
 	virtual BOOL OnPreparePrinting(CPrintInfo* pInfo);
@@ -44,7 +46,14 @@ protected:
 	afx_msg void OnRButtonUp(UINT nFlags, CPoint point);
 	afx_msg void OnContextMenu(CWnd* pWnd, CPoint point);
 	afx_msg void OnGetDispInfo(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnEditFind();
+	afx_msg LRESULT OnFindReplace(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnSearchProgress(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnSearchComplete(WPARAM wParam, LPARAM lParam);
 	DECLARE_MESSAGE_MAP()
+
+private:
+	CFindReplaceDialog* m_pFindDlg = nullptr; ///< Pointeur vers la boîte de dialogue modèle standard "Rechercher".
 };
 
 #ifndef _DEBUG  // debug version in VisualiseurLogsView.cpp

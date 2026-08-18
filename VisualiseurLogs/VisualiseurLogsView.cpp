@@ -20,6 +20,9 @@
 
 // CVisualiseurLogsView
 
+// Enregistrement du message système standard de communication avec la boîte "Rechercher"
+static const UINT wm_FindReplaceMsg = ::RegisterWindowMessage(FINDMSGSTRING);
+
 IMPLEMENT_DYNCREATE(CVisualiseurLogsView, CListView)
 
 BEGIN_MESSAGE_MAP(CVisualiseurLogsView, CListView)
@@ -30,6 +33,10 @@ BEGIN_MESSAGE_MAP(CVisualiseurLogsView, CListView)
 	ON_WM_CONTEXTMENU()
 	ON_WM_RBUTTONUP()
 	ON_NOTIFY_REFLECT(LVN_GETDISPINFO, &CVisualiseurLogsView::OnGetDispInfo)
+	ON_COMMAND(ID_EDIT_FIND, &CVisualiseurLogsView::OnEditFind)
+	ON_REGISTERED_MESSAGE(wm_FindReplaceMsg, &CVisualiseurLogsView::OnFindReplace)
+	ON_MESSAGE(WM_USER + 100, &CVisualiseurLogsView::OnSearchProgress)
+	ON_MESSAGE(WM_USER + 101, &CVisualiseurLogsView::OnSearchComplete)
 END_MESSAGE_MAP()
 
 // CVisualiseurLogsView construction/destruction
@@ -42,12 +49,17 @@ CVisualiseurLogsView::CVisualiseurLogsView() noexcept
 
 CVisualiseurLogsView::~CVisualiseurLogsView()
 {
+	if (m_pFindDlg != nullptr)
+	{
+		m_pFindDlg->DestroyWindow();
+		m_pFindDlg = nullptr;
+	}
 }
 
 /**
  * @brief Configure les styles de la fenêtre d'affichage de liste avant sa création physique.
  * 
- * Cette surcharge est cruciale car elle applique :
+ * Cette surcharge applique :
  * 1. Le style de rapport complet (LVS_REPORT) pour gérer les colonnes.
  * 2. Le style virtuel (LVS_OWNERDATA) : empêche le stockage interne des données et active les notifications LVN_GETDISPINFO.
  * 3. La sélection simple (LVS_SINGLESEL).
@@ -82,6 +94,32 @@ void CVisualiseurLogsView::OnInitialUpdate()
 	listCtrl.InsertColumn(1, _T("Message de Log"), LVCFMT_LEFT, 800);
 
 	OnUpdate(nullptr, 0, nullptr);
+}
+
+/**
+ * @brief Intercepte les messages clavier avant qu'ils ne soient distribués au contrôle SysListView32.
+ * 
+ * Cette surcharge est essentielle car elle intercepte directement la combinaison Ctrl + F au niveau clavier,
+ * de manière totalement indépendante des tables de ressources d'accélérateurs (qui peuvent être désactivées ou
+ * surchargées par le moteur MDI de MFC lors de l'activation des documents). En détectant l'appui sur 'F' avec la
+ * touche CTRL enfoncée, on déclenche directement l'ouverture de notre boîte de dialogue de recherche OnEditFind.
+ *
+ * @param pMsg Pointeur vers le message système Windows reçu.
+ * @return BOOL TRUE si le message a été traduit et traité (consommé), FALSE s'il doit suivre son cours normal.
+ */
+BOOL CVisualiseurLogsView::PreTranslateMessage(MSG* pMsg)
+{
+	if (pMsg->message == WM_KEYDOWN)
+	{
+		// CTRL + F
+		if (pMsg->wParam == 'F' && (::GetKeyState(VK_CONTROL) & 0x8000))
+		{
+			OnEditFind();
+			return TRUE;
+		}
+	}
+
+	return CListView::PreTranslateMessage(pMsg);
 }
 
 /**
@@ -223,3 +261,128 @@ CVisualiseurLogsDoc* CVisualiseurLogsView::GetDocument() const // non-debug vers
 
 
 // CVisualiseurLogsView message handlers
+
+/**
+ * @brief Commande appelée pour déclencher la recherche (ex: Ctrl + F ou Menu Edition ➔ Rechercher).
+ * Alloue dynamiquement et affiche la boîte de dialogue standard modeless "Rechercher" de Windows.
+ */
+void CVisualiseurLogsView::OnEditFind()
+{
+	if (m_pFindDlg != nullptr)
+	{
+		m_pFindDlg->SetActiveWindow();
+		return;
+	}
+
+	m_pFindDlg = new CFindReplaceDialog();
+	m_pFindDlg->Create(TRUE, _T(""), nullptr, FR_DOWN, this);
+}
+
+/**
+ * @brief Intercepte les notifications envoyées par la boîte de dialogue standard "Rechercher".
+ * 
+ * Ce gestionnaire reçoit les messages enregistrés lorsque l'utilisateur :
+ * 1. Clique sur "Suivant" (FindNext) ➔ Déclenche la recherche asynchrone dans le document.
+ * 2. Ferme le dialogue (IsTerminating) ➔ Réinitialise notre pointeur m_pFindDlg.
+ *
+ * @param wParam Paramètre non utilisé dans cette notification.
+ * @param lParam Pointeur vers la structure FINDREPLACE standard.
+ * @return LRESULT Résultat d'exécution (0 par défaut).
+ */
+LRESULT CVisualiseurLogsView::OnFindReplace(WPARAM wParam, LPARAM lParam)
+{
+	if (m_pFindDlg == nullptr)
+	{
+		return 0;
+	}
+
+	if (m_pFindDlg->IsTerminating())
+	{
+		m_pFindDlg = nullptr;
+		return 0;
+	}
+
+	if (m_pFindDlg->FindNext())
+	{
+		CString strFind = m_pFindDlg->GetFindString();
+		CVisualiseurLogsDoc* pDoc = GetDocument();
+		if (pDoc != nullptr)
+		{
+			CFrameWnd* pMainWnd = static_cast<CFrameWnd*>(AfxGetMainWnd());
+			if (pMainWnd != nullptr)
+			{
+				pMainWnd->SetMessageText(_T("Recherche lancée..."));
+			}
+			
+			pDoc->StartSearch(strFind, GetSafeHwnd());
+		}
+	}
+
+	return 0;
+}
+
+/**
+ * @brief Reçoit les rapports de progression émis périodiquement par le thread de recherche asynchrone.
+ * 
+ * Met à jour dynamiquement le statut dans la barre d'état principale de l'application :
+ * ex: "Recherche en cours... 45% (3 241 correspondances trouvées)".
+ *
+ * @param wParam Pourcentage d'avancement de la recherche (0-100).
+ * @param lParam Nombre de correspondances identifiées jusqu'à présent.
+ * @return LRESULT 0
+ */
+LRESULT CVisualiseurLogsView::OnSearchProgress(WPARAM wParam, LPARAM lParam)
+{
+	auto progress = static_cast<int>(wParam);
+	auto matchCount = static_cast<size_t>(lParam);
+
+	CString strStatus;
+	strStatus.Format(_T("Recherche en cours... %d%% (%u correspondances trouvées)"), progress, static_cast<unsigned int>(matchCount));
+	
+	auto pMainWnd = static_cast<CFrameWnd*>(AfxGetMainWnd());
+	if (pMainWnd != nullptr)
+	{
+		pMainWnd->SetMessageText(strStatus);
+	}
+
+	return 0;
+}
+
+/**
+ * @brief Appelé sur le thread UI principal lorsque la recherche en tâche de fond est terminée.
+ * 
+ * Applique le filtre final sur le document, force l'actualisation complète de la liste virtuelle
+ * et affiche le bilan final dans la barre d'état principale de l'application.
+ *
+ * @param wParam Nombre total de correspondances trouvées.
+ * @param lParam Non utilisé.
+ * @return LRESULT 0
+ */
+LRESULT CVisualiseurLogsView::OnSearchComplete(WPARAM wParam, LPARAM lParam)
+{
+	auto totalMatches = static_cast<size_t>(wParam);
+
+	CVisualiseurLogsDoc* pDoc = GetDocument();
+	if (pDoc != nullptr)
+	{
+		pDoc->ApplySearchFilter(); // Transfert des résultats et rafraîchissement complet (Invalidate)
+	}
+
+	CString strStatus;
+	if (totalMatches > 0)
+	{
+		strStatus.Format(_T("Recherche terminée ! %u lignes correspondantes affichées."), static_cast<unsigned int>(totalMatches));
+	}
+	else
+	{
+		strStatus = _T("Recherche terminée : aucune ligne correspondante trouvée.");
+	}
+
+	CFrameWnd* pMainWnd = static_cast<CFrameWnd*>(AfxGetMainWnd());
+	if (pMainWnd != nullptr)
+	{
+		pMainWnd->SetMessageText(strStatus);
+	}
+
+	return 0;
+}
