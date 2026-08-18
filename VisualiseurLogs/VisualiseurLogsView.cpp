@@ -33,6 +33,7 @@ BEGIN_MESSAGE_MAP(CVisualiseurLogsView, CListView)
 	ON_WM_CONTEXTMENU()
 	ON_WM_RBUTTONUP()
 	ON_NOTIFY_REFLECT(LVN_GETDISPINFO, &CVisualiseurLogsView::OnGetDispInfo)
+	ON_NOTIFY_REFLECT(NM_CUSTOMDRAW, &CVisualiseurLogsView::OnCustomDraw)
 	ON_COMMAND(ID_EDIT_FIND, &CVisualiseurLogsView::OnEditFind)
 	ON_REGISTERED_MESSAGE(wm_FindReplaceMsg, &CVisualiseurLogsView::OnFindReplace)
 	ON_MESSAGE(WM_USER + 100, &CVisualiseurLogsView::OnSearchProgress)
@@ -400,4 +401,52 @@ LRESULT CVisualiseurLogsView::OnSearchComplete(WPARAM wParam, LPARAM lParam)
 	}
 
 	return 0;
+}
+
+/**
+ * @brief Gère la notification de dessin personnalisé NM_CUSTOMDRAW (Message Reflected).
+ * 
+ * Cette surcharge permet de colorer dynamiquement le texte des lignes de logs visibles :
+ * - Rouge Sombre (RGB(220, 30, 30)) pour les lignes contenant le mot-clé "[ERROR]".
+ * - Orange Sombre (RGB(220, 110, 0)) pour les lignes contenant "[WARN]" ou "[WARNING]".
+ *
+ * @param pNMHDR Pointeur sur la structure d'entête de notification de dessin.
+ * @param pResult Pointeur sur la valeur de retour contrôlant le cycle de dessin de Windows.
+ */
+void CVisualiseurLogsView::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	auto pLVCD = static_cast<LPNMLVCUSTOMDRAW>(static_cast<void*>(pNMHDR));
+
+	*pResult = CDRF_DODEFAULT;
+
+	switch (pLVCD->nmcd.dwDrawStage)
+	{
+		case CDDS_PREPAINT:
+			*pResult = CDRF_NOTIFYITEMDRAW;
+			break;
+
+		case CDDS_ITEMPREPAINT:
+			{
+				auto index = static_cast<int>(pLVCD->nmcd.dwItemSpec);
+				const CVisualiseurLogsDoc* pDoc = GetDocument();
+				if (pDoc != nullptr)
+				{
+					CString strLog = pDoc->GetLine(static_cast<size_t>(index));
+
+					if (strLog.Find(_T("[ERROR]")) != -1)
+					{
+						pLVCD->clrText = RGB(220, 30, 30);
+					}
+					else if (strLog.Find(_T("[WARN]")) != -1 || strLog.Find(_T("[WARNING]")) != -1)
+					{
+						pLVCD->clrText = RGB(220, 110, 0);
+					}
+				}
+
+				*pResult = CDRF_DODEFAULT;
+			}
+			break;
+		default:
+			break;
+	}
 }

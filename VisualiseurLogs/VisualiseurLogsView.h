@@ -46,6 +46,7 @@ protected:
 	afx_msg void OnRButtonUp(UINT nFlags, CPoint point);
 	afx_msg void OnContextMenu(CWnd* pWnd, CPoint point);
 	afx_msg void OnGetDispInfo(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg void OnEditFind();
 	afx_msg LRESULT OnFindReplace(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnSearchProgress(WPARAM wParam, LPARAM lParam);

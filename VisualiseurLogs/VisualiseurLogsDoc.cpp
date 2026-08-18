@@ -426,7 +426,7 @@ void CVisualiseurLogsDoc::PerformSearchInternal(std::string targetUTF8, std::str
 }
 
 /**
- * @brief Calcule la longueur propre d'une ligne brute en excluant les retours chariot (\r, \n) (conforme cpp:S3776).
+ * @brief Calcule la longueur propre d'une ligne brute en excluant les retours chariot (\r, \n)
  */
 size_t CVisualiseurLogsDoc::GetCleanLineLength(const char* pData, uint64_t start, uint64_t end) const noexcept
 {
@@ -440,7 +440,7 @@ size_t CVisualiseurLogsDoc::GetCleanLineLength(const char* pData, uint64_t start
 }
 
 /**
- * @brief Vérifie de manière isolée et performante si une ligne de logs correspond aux critères (conforme cpp:S3776).
+ * @brief Vérifie de manière isolée et performante si une ligne de logs correspond aux critères
  */
 bool CVisualiseurLogsDoc::IsLineMatching(std::string_view lineView, const std::string& targetUTF8, const std::string& targetANSI, bool bMatchCase) const noexcept
 {
