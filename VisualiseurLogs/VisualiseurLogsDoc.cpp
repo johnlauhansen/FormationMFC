@@ -283,13 +283,13 @@ CString CVisualiseurLogsDoc::GetLine(size_t index) const
 		return CString();
 	}
 
-	// Étape 1 : Tentative de conversion depuis UTF-8 (Code Page standard moderne)
-	int requiredCharCount = ::MultiByteToWideChar(CP_UTF8, 0, pLineStart, static_cast<int>(length), nullptr, 0);
+	// Étape 1 : Tentative de conversion depuis UTF-8 (Code Page standard moderne) avec rejet des caractères invalides
+	int requiredCharCount = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, pLineStart, static_cast<int>(length), nullptr, 0);
 	if (requiredCharCount > 0)
 	{
 		CString strResult;
 		wchar_t* pBuffer = strResult.GetBuffer(requiredCharCount);
-		::MultiByteToWideChar(CP_UTF8, 0, pLineStart, static_cast<int>(length), pBuffer, requiredCharCount);
+		::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, pLineStart, static_cast<int>(length), pBuffer, requiredCharCount);
 		strResult.ReleaseBufferSetLength(requiredCharCount);
 		return strResult;
 	}
