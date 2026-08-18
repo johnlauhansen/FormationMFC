@@ -16,6 +16,8 @@
 #include <string_view>
 #include <string>
 #include <thread>
+#include <algorithm>
+#include <cctype>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -310,20 +312,6 @@ CString CVisualiseurLogsDoc::GetLine(size_t index) const
 	return CString();
 }
 
-
-/**
- * @brief Démarre une recherche textuelle asynchrone dans un thread secondaire de manière ultra-rapide.
- * 
- * Pour éviter toute corruption de données ou de conversion de CString à travers les threads (les macros de conversion
- * ATL utilisent un cache local au thread principal), le mot-clé de recherche est converti en std::string (UTF-8 et ANSI)
- * sur le thread principal (UI) où l'environnement est garanti sain, puis ces objets std::string sont passés par valeur au thread.
- *
- * @param strSearchText Texte recherché (mot-clé).
- * @param hViewWnd HWND de la vue réceptrice des notifications.
- */
-#include <algorithm>
-#include <cctype>
-
 /**
  * @brief Helper statique pour effectuer une recherche de sous-chaîne sans tenir compte de la casse (Case-Insensitive).
  * 
@@ -350,11 +338,6 @@ static bool ContainsIgnoreCase(std::string_view hack, std::string_view search)
 
 /**
  * @brief Démarre une recherche textuelle asynchrone dans un thread secondaire de manière ultra-rapide.
- * 
- * SÉCURITÉ SONAR & COHÉRENCE MULTITHREAD (cpp:S1188 & cpp:S5962) : 
- * Pour éviter toute corruption de données ou de conversion de CString à travers les threads (les macros de conversion
- * ATL utilisent un cache local au thread principal), nous convertissons le mot-clé de recherche en std::string (UTF-8 et ANSI)
- * sur le thread principal (UI) où l'environnement est garanti sain, puis nous passons ces objets std::string par valeur au thread.
  *
  * @param strSearchText Texte recherché (mot-clé).
  * @param bMatchCase Indique si la recherche doit respecter la casse (Case-Sensitive).
@@ -411,31 +394,14 @@ void CVisualiseurLogsDoc::PerformSearchInternal(std::string targetUTF8, std::str
 		uint64_t start = m_lineOffsets[i];
 		uint64_t end = (i + 1 < totalLines) ? m_lineOffsets[i + 1] : fileSize;
 
-		size_t length = end - start;
-		while (length > 0 && (pData[start + length - 1] == '\r' || pData[start + length - 1] == '\n'))
-		{
-			length--;
-		}
-
+		size_t length = GetCleanLineLength(pData, start, end);
 		if (length > 0)
 		{
 			std::string_view lineView(pData + start, length);
 			
-			if (bMatchCase)
+			if (IsLineMatching(lineView, targetUTF8, targetANSI, bMatchCase))
 			{
-				if (lineView.find(targetUTF8) != std::string_view::npos ||
-					(targetUTF8 != targetANSI && lineView.find(targetANSI) != std::string_view::npos))
-				{
-					localMatches.push_back(i);
-				}
-			}
-			else
-			{
-				if (ContainsIgnoreCase(lineView, targetUTF8) ||
-					(targetUTF8 != targetANSI && ContainsIgnoreCase(lineView, targetANSI)))
-				{
-					localMatches.push_back(i);
-				}
+				localMatches.push_back(i);
 			}
 		}
 
@@ -457,6 +423,35 @@ void CVisualiseurLogsDoc::PerformSearchInternal(std::string targetUTF8, std::str
 	}
 
 	m_isSearching = false;
+}
+
+/**
+ * @brief Calcule la longueur propre d'une ligne brute en excluant les retours chariot (\r, \n) (conforme cpp:S3776).
+ */
+size_t CVisualiseurLogsDoc::GetCleanLineLength(const char* pData, uint64_t start, uint64_t end) const noexcept
+{
+	size_t length = end - start;
+	
+	while (length > 0 && (pData[start + length - 1] == '\r' || pData[start + length - 1] == '\n'))
+	{
+		length--;
+	}
+	return length;
+}
+
+/**
+ * @brief Vérifie de manière isolée et performante si une ligne de logs correspond aux critères (conforme cpp:S3776).
+ */
+bool CVisualiseurLogsDoc::IsLineMatching(std::string_view lineView, const std::string& targetUTF8, const std::string& targetANSI, bool bMatchCase) const noexcept
+{
+	if (bMatchCase)
+	{
+		return lineView.find(targetUTF8) != std::string_view::npos ||
+			   (targetUTF8 != targetANSI && lineView.find(targetANSI) != std::string_view::npos);
+	}
+	
+	return ContainsIgnoreCase(lineView, targetUTF8) ||
+		   (targetUTF8 != targetANSI && ContainsIgnoreCase(lineView, targetANSI));
 }
 
 /**

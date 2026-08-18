@@ -107,10 +107,29 @@ private:
 	 *
 	 * @param targetUTF8 Terme de recherche pré-converti en UTF-8.
 	 * @param targetANSI Terme de recherche pré-converti en ANSI.
-	 * @param bMatchCase Indique si la recherche doit respecter la casse (Case-Sensitive).
+	 * @param bMatchCase Indique si la recherche respecte la casse (Case-Sensitive).
 	 * @param hViewWnd Fenêtre recevant les messages d'UI de progression.
 	 */
 	void PerformSearchInternal(std::string targetUTF8, std::string targetANSI, bool bMatchCase, HWND hViewWnd);
+
+	/**
+	 * @brief Calcule la longueur propre d'une ligne brute en excluant les retours chariot (\r, \n) (conforme cpp:S3776).
+	 * @param pData Pointeur sur les données brutes du fichier.
+	 * @param start Position de départ de la ligne.
+	 * @param end Position de fin de la ligne.
+	 * @return size_t Longueur propre de la ligne.
+	 */
+	size_t GetCleanLineLength(const char* pData, uint64_t start, uint64_t end) const noexcept;
+
+	/**
+	 * @brief Vérifie de manière isolée et performante si une ligne de logs correspond aux critères (conforme cpp:S3776).
+	 * @param lineView Vue de chaîne sur la ligne nettoyée.
+	 * @param targetUTF8 Mot-clé en UTF-8.
+	 * @param targetANSI Mot-clé en ANSI.
+	 * @param bMatchCase Respect de la casse.
+	 * @return true si la ligne correspond, false sinon.
+	 */
+	bool IsLineMatching(std::string_view lineView, const std::string& targetUTF8, const std::string& targetANSI, bool bMatchCase) const noexcept;
 
 private:
 	CMappedFile m_mappedFile;
