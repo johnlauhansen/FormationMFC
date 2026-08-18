@@ -49,7 +49,7 @@ BOOL CVisualiseurLogsView::PreCreateWindow(CREATESTRUCT& cs)
 	cs.style &= ~LVS_TYPEMASK;
 	cs.style |= LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL;
 
-	return CView::PreCreateWindow(cs);
+	return CListView::PreCreateWindow(cs);
 }
 
 void CVisualiseurLogsView::OnInitialUpdate()
@@ -58,34 +58,60 @@ void CVisualiseurLogsView::OnInitialUpdate()
 
 	CListCtrl& listCtrl = GetListCtrl();
 
-
 	listCtrl.SetExtendedStyle(listCtrl.GetExtendedStyle() | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
 
 	listCtrl.InsertColumn(0, _T("Ligne"), LVCFMT_LEFT, 80);
 	listCtrl.InsertColumn(1, _T("Message de Log"), LVCFMT_LEFT, 800);
 
-	listCtrl.SetItemCountEx(1000000, LVSICF_NOSCROLL | LVSICF_NOINVALIDATEALL);
+	OnUpdate(nullptr, 0, nullptr);
 }
 
-void CVisualiseurLogsView::OnGetDispInfo(NMHDR* pNMHDR, LRESULT* pResult) const
+void CVisualiseurLogsView::OnUpdate(CView* pSender, LPARAM lHint, CObject* pHint)
+{
+	CVisualiseurLogsDoc* pDoc = GetDocument();
+	if (pDoc != nullptr)
+	{
+		CListCtrl& listCtrl = GetListCtrl();
+		size_t lineCount = pDoc->GetLineCount();
+		
+		listCtrl.SetItemCountEx(static_cast<int>(lineCount), LVSICF_NOSCROLL | LVSICF_NOINVALIDATEALL);
+		listCtrl.Invalidate();
+	}
+}
+
+void CVisualiseurLogsView::OnGetDispInfo(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	auto pDispInfo = static_cast<NMLVDISPINFO*>(static_cast<void*>(pNMHDR));
 	LVITEM* pItem = &pDispInfo->item;
 
-	if (pItem->mask & LVIF_TEXT)
+	const CVisualiseurLogsDoc* pDoc = GetDocument();
+	if (pDoc != nullptr && (pItem->mask & LVIF_TEXT))
 	{
 		int index = pItem->iItem; // Index de la ligne demandée
 
 		if (pItem->iSubItem == 0)
 		{
 			CString strLineNum;
-			strLineNum.Format(_T("%d"), index + 1);
+			strLineNum.Format(_T("%u"), index + 1);
 			_tcscpy_s(pItem->pszText, pItem->cchTextMax, strLineNum);
 		}
 		else if (pItem->iSubItem == 1)
 		{
-			CString strLog;
-			strLog.Format(_T("Log exemple numéro %d - [INFO] Application démarrée"), index + 1);
+			CString strLog = pDoc->GetLine(static_cast<size_t>(index));
+
+			// pItem->cchTextMax taille max du tampon fournie par Windows 
+			if (strLog.GetLength() >= pItem->cchTextMax)
+			{
+				if (pItem->cchTextMax > 4)
+				{
+					strLog = strLog.Left(pItem->cchTextMax - 4) + _T("...");
+				}
+				else
+				{
+					strLog = strLog.Left(pItem->cchTextMax - 1);
+				}
+			}
+
 			_tcscpy_s(pItem->pszText, pItem->cchTextMax, strLog);
 		}
 	}

@@ -136,3 +136,114 @@ void CVisualiseurLogsDoc::Dump(CDumpContext& dc) const
 
 
 // CVisualiseurLogsDoc commands
+
+BOOL CVisualiseurLogsDoc::OnOpenDocument(LPCTSTR lpszPathName)
+{
+	DeleteContents();
+
+	if (!m_mappedFile.Open(lpszPathName))
+	{
+		CString strError;
+		strError.Format(_T("Impossible d'ouvrir et de projeter le fichier : %s"), lpszPathName);
+		AfxMessageBox(strError, MB_ICONERROR);
+		return FALSE;
+	}
+
+	const char* pData = m_mappedFile.GetData();
+	uint64_t fileSize = m_mappedFile.GetSize();
+
+	if (fileSize > 0 && pData != nullptr)
+	{
+		m_lineOffsets.reserve(fileSize / 100);
+
+		m_lineOffsets.push_back(0);
+
+		for (uint64_t i = 0; i < fileSize; ++i)
+		{
+			if (pData[i] == '\n' && i + 1 < fileSize)
+			{
+				m_lineOffsets.push_back(i + 1);
+			}
+		}
+	}
+
+	SetModifiedFlag(FALSE);
+	UpdateAllViews(nullptr);
+
+	return TRUE;
+}
+
+void CVisualiseurLogsDoc::DeleteContents()
+{
+	m_mappedFile.Close();
+	m_lineOffsets.clear();
+	m_lineOffsets.shrink_to_fit();
+
+	CDocument::DeleteContents();
+}
+
+CString CVisualiseurLogsDoc::GetLine(size_t index) const
+{
+	if (index >= m_lineOffsets.size() || !m_mappedFile.IsOpen())
+	{
+		return CString();
+	}
+
+	const char* pData = m_mappedFile.GetData();
+	uint64_t fileSize = m_mappedFile.GetSize();
+	uint64_t startOffset = m_lineOffsets[index];
+	uint64_t endOffset = 0;
+
+	if (index + 1 < m_lineOffsets.size())
+	{
+		endOffset = m_lineOffsets[index + 1];
+	}
+	else
+	{
+		endOffset = fileSize;
+	}
+
+	size_t length = endOffset - startOffset;
+	if (length == 0)
+	{
+		return CString();
+	}
+
+	const char* pLineStart = pData + startOffset;
+
+	// Retirer les retours chariot et sauts de ligne à la fin
+	while (length > 0 && (pLineStart[length - 1] == '\r' || pLineStart[length - 1] == '\n'))
+	{
+		length--;
+	}
+
+	if (length == 0)
+	{
+		return CString();
+	}
+
+	// Conversion d'encodage (UTF-8 ou ANSI vers UTF-16 Unicode)
+	int requiredCharCount = ::MultiByteToWideChar(CP_UTF8, 0, pLineStart, static_cast<int>(length), nullptr, 0);
+	if (requiredCharCount > 0)
+	{
+		CString strResult;
+		wchar_t* pBuffer = strResult.GetBuffer(requiredCharCount);
+		::MultiByteToWideChar(CP_UTF8, 0, pLineStart, static_cast<int>(length), pBuffer, requiredCharCount);
+		strResult.ReleaseBufferSetLength(requiredCharCount);
+		return strResult;
+	}
+	else
+	{
+		requiredCharCount = ::MultiByteToWideChar(CP_ACP, 0, pLineStart, static_cast<int>(length), nullptr, 0);
+		if (requiredCharCount > 0)
+		{
+			CString strResult;
+			wchar_t* pBuffer = strResult.GetBuffer(requiredCharCount);
+			::MultiByteToWideChar(CP_ACP, 0, pLineStart, static_cast<int>(length), pBuffer, requiredCharCount);
+			strResult.ReleaseBufferSetLength(requiredCharCount);
+			return strResult;
+		}
+	}
+
+	return CString();
+}
