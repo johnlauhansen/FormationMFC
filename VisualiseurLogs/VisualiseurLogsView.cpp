@@ -20,15 +20,16 @@
 
 // CVisualiseurLogsView
 
-IMPLEMENT_DYNCREATE(CVisualiseurLogsView, CView)
+IMPLEMENT_DYNCREATE(CVisualiseurLogsView, CListView)
 
-BEGIN_MESSAGE_MAP(CVisualiseurLogsView, CView)
+BEGIN_MESSAGE_MAP(CVisualiseurLogsView, CListView)
 	// Standard printing commands
-	ON_COMMAND(ID_FILE_PRINT, &CView::OnFilePrint)
-	ON_COMMAND(ID_FILE_PRINT_DIRECT, &CView::OnFilePrint)
+	ON_COMMAND(ID_FILE_PRINT, &CListView::OnFilePrint)
+	ON_COMMAND(ID_FILE_PRINT_DIRECT, &CListView::OnFilePrint)
 	ON_COMMAND(ID_FILE_PRINT_PREVIEW, &CVisualiseurLogsView::OnFilePrintPreview)
 	ON_WM_CONTEXTMENU()
 	ON_WM_RBUTTONUP()
+	ON_NOTIFY_REFLECT(LVN_GETDISPINFO, &CVisualiseurLogsView::OnGetDispInfo)
 END_MESSAGE_MAP()
 
 // CVisualiseurLogsView construction/destruction
@@ -45,24 +46,52 @@ CVisualiseurLogsView::~CVisualiseurLogsView()
 
 BOOL CVisualiseurLogsView::PreCreateWindow(CREATESTRUCT& cs)
 {
-	// TODO: Modify the Window class or styles here by modifying
-	//  the CREATESTRUCT cs
+	cs.style &= ~LVS_TYPEMASK;
+	cs.style |= LVS_REPORT | LVS_OWNERDATA | LVS_SINGLESEL;
 
 	return CView::PreCreateWindow(cs);
 }
 
-// CVisualiseurLogsView drawing
-
-void CVisualiseurLogsView::OnDraw(CDC* /*pDC*/)
+void CVisualiseurLogsView::OnInitialUpdate()
 {
-	CVisualiseurLogsDoc* pDoc = GetDocument();
-	ASSERT_VALID(pDoc);
-	if (!pDoc)
-		return;
+	CListView::OnInitialUpdate();
 
-	// TODO: add draw code for native data here
+	CListCtrl& listCtrl = GetListCtrl();
+
+
+	listCtrl.SetExtendedStyle(listCtrl.GetExtendedStyle() | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
+
+	listCtrl.InsertColumn(0, _T("Ligne"), LVCFMT_LEFT, 80);
+	listCtrl.InsertColumn(1, _T("Message de Log"), LVCFMT_LEFT, 800);
+
+	listCtrl.SetItemCountEx(1000000, LVSICF_NOSCROLL | LVSICF_NOINVALIDATEALL);
 }
 
+void CVisualiseurLogsView::OnGetDispInfo(NMHDR* pNMHDR, LRESULT* pResult) const
+{
+	auto pDispInfo = static_cast<NMLVDISPINFO*>(static_cast<void*>(pNMHDR));
+	LVITEM* pItem = &pDispInfo->item;
+
+	if (pItem->mask & LVIF_TEXT)
+	{
+		int index = pItem->iItem; // Index de la ligne demandée
+
+		if (pItem->iSubItem == 0)
+		{
+			CString strLineNum;
+			strLineNum.Format(_T("%d"), index + 1);
+			_tcscpy_s(pItem->pszText, pItem->cchTextMax, strLineNum);
+		}
+		else if (pItem->iSubItem == 1)
+		{
+			CString strLog;
+			strLog.Format(_T("Log exemple numéro %d - [INFO] Application démarrée"), index + 1);
+			_tcscpy_s(pItem->pszText, pItem->cchTextMax, strLog);
+		}
+	}
+
+	*pResult = 0;
+}
 
 // CVisualiseurLogsView printing
 

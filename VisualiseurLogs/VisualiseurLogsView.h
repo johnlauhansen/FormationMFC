@@ -5,7 +5,7 @@
 #pragma once
 
 
-class CVisualiseurLogsView : public CView
+class CVisualiseurLogsView : public CListView
 {
 protected: // create from serialization only
 	CVisualiseurLogsView() noexcept;
@@ -20,8 +20,9 @@ public:
 
 // Overrides
 public:
-	virtual void OnDraw(CDC* pDC);  // overridden to draw this view
+
 	virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
+	virtual void OnInitialUpdate();
 protected:
 	virtual BOOL OnPreparePrinting(CPrintInfo* pInfo);
 	virtual void OnBeginPrinting(CDC* pDC, CPrintInfo* pInfo);
@@ -42,11 +43,12 @@ protected:
 	afx_msg void OnFilePrintPreview();
 	afx_msg void OnRButtonUp(UINT nFlags, CPoint point);
 	afx_msg void OnContextMenu(CWnd* pWnd, CPoint point);
+	afx_msg void OnGetDispInfo(NMHDR* pNMHDR, LRESULT* pResult) const;
 	DECLARE_MESSAGE_MAP()
 };
 
 #ifndef _DEBUG  // debug version in VisualiseurLogsView.cpp
 inline CVisualiseurLogsDoc* CVisualiseurLogsView::GetDocument() const
-   { return reinterpret_cast<CVisualiseurLogsDoc*>(m_pDocument); }
+   { return static_cast<CVisualiseurLogsDoc*>(m_pDocument); }
 #endif
 

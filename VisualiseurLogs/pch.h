@@ -9,5 +9,8 @@
 
 // add headers that you want to pre-compile here
 #include "framework.h"
+#include <afxwin.h>
+#include <afxext.h>
+#include <afxcview.h>
 
 #endif //PCH_H

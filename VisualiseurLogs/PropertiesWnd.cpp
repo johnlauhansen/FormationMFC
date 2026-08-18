@@ -227,7 +227,7 @@ void CPropertiesWnd::InitPropList()
 	CMFCPropertyGridProperty* pGroup41 = new CMFCPropertyGridProperty(_T("First sub-level"));
 	pGroup4->AddSubItem(pGroup41);
 
-	CMFCPropertyGridProperty* pGroup411 = new CMFCPropertyGridProperty(_T("Second sub-level"));
+	auto pGroup411 = new CMFCPropertyGridProperty(_T("Second sub-level"));
 	pGroup41->AddSubItem(pGroup411);
 
 	pGroup411->AddSubItem(new CMFCPropertyGridProperty(_T("Item 1"), (_variant_t) _T("Value 1"), _T("This is a description")));
