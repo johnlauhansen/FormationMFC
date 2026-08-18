@@ -16,7 +16,17 @@ protected: // create from serialization only
 
 // Attributes
 public:
+	/**
+	 * @brief Obtient le nombre total de lignes indexées dans le fichier de log chargé.
+	 * @return size_t Nombre de lignes.
+	 */
 	size_t GetLineCount() const noexcept { return m_lineOffsets.size(); }
+
+	/**
+	 * @brief Extrait, décode et nettoie une ligne de log spécifique par son index de ligne (0-based).
+	 * @param index Index de la ligne demandée.
+	 * @return CString Le contenu textuel Unicode de la ligne de log.
+	 */
 	CString GetLine(size_t index) const;
 
 // Operations

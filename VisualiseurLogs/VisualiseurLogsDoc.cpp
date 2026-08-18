@@ -137,6 +137,16 @@ void CVisualiseurLogsDoc::Dump(CDumpContext& dc) const
 
 // CVisualiseurLogsDoc commands
 
+/**
+ * @brief Surcharge MFC appelée lors de l'ouverture d'un fichier (ex: Fichier ➔ Ouvrir).
+ * 
+ * Cette méthode ouvre le fichier via notre moteur CMappedFile, puis réalise une
+ * indexation ultra-rapide en un seul passage (single-scan) des positions (offsets) de
+ * chaque début de ligne (\n). Elle notifie ensuite les vues pour mettre à jour l'affichage.
+ *
+ * @param lpszPathName Chemin complet du fichier sélectionné par l'utilisateur.
+ * @return BOOL TRUE si le document a été ouvert et indexé avec succès, FALSE sinon.
+ */
 BOOL CVisualiseurLogsDoc::OnOpenDocument(LPCTSTR lpszPathName)
 {
 	DeleteContents();
@@ -168,22 +178,42 @@ BOOL CVisualiseurLogsDoc::OnOpenDocument(LPCTSTR lpszPathName)
 	}
 
 	SetModifiedFlag(FALSE);
+
 	UpdateAllViews(nullptr);
 
 	return TRUE;
 }
 
+/**
+ * @brief Nettoie le contenu actuel du document et réinitialise tous les membres.
+ * 
+ * Appelée automatiquement par MFC avant de réutiliser ou de détruire le document.
+ * Elle assure la fermeture du mapping mémoire et libère la capacité allouée par
+ * le vecteur d'offsets (shrink_to_fit).
+ */
 void CVisualiseurLogsDoc::DeleteContents()
 {
 	m_mappedFile.Close();
 	m_lineOffsets.clear();
-	m_lineOffsets.shrink_to_fit();
+	m_lineOffsets.shrink_to_fit(); // Libère réellement la RAM système du vecteur d'offsets
 
 	CDocument::DeleteContents();
 }
 
+/**
+ * @brief Récupère, convertit et renvoie une ligne spécifique du fichier log sous forme de CString Unicode.
+ * 
+ * Cette méthode est optimisée pour l'On-Demand Rendering (pas de copie) :
+ * 1. Elle délimite la ligne demandée à l'aide de l'index d'offsets (m_lineOffsets[index] et suivant).
+ * 2. Elle retire les caractères de contrôle (\r, \n) de fin de ligne.
+ * 3. Elle convertit le buffer brut (UTF-8 ou ANSI) en UTF-16 Unicode via MultiByteToWideChar.
+ *
+ * @param index Index de la ligne demandée (0-based).
+ * @return CString La chaîne décodée et prête à être affichée. Retourne une chaîne vide si index invalide.
+ */
 CString CVisualiseurLogsDoc::GetLine(size_t index) const
 {
+	// Sécurité d'index
 	if (index >= m_lineOffsets.size() || !m_mappedFile.IsOpen())
 	{
 		return CString();
@@ -211,7 +241,6 @@ CString CVisualiseurLogsDoc::GetLine(size_t index) const
 
 	const char* pLineStart = pData + startOffset;
 
-	// Retirer les retours chariot et sauts de ligne à la fin
 	while (length > 0 && (pLineStart[length - 1] == '\r' || pLineStart[length - 1] == '\n'))
 	{
 		length--;
@@ -222,7 +251,7 @@ CString CVisualiseurLogsDoc::GetLine(size_t index) const
 		return CString();
 	}
 
-	// Conversion d'encodage (UTF-8 ou ANSI vers UTF-16 Unicode)
+	// Étape 1 : Tentative de conversion depuis UTF-8 (Code Page standard moderne)
 	int requiredCharCount = ::MultiByteToWideChar(CP_UTF8, 0, pLineStart, static_cast<int>(length), nullptr, 0);
 	if (requiredCharCount > 0)
 	{
@@ -234,6 +263,7 @@ CString CVisualiseurLogsDoc::GetLine(size_t index) const
 	}
 	else
 	{
+		// Étape 2 : Fallback sur l'ANSI local (CP_ACP) si le fichier contient des octets UTF-8 invalides
 		requiredCharCount = ::MultiByteToWideChar(CP_ACP, 0, pLineStart, static_cast<int>(length), nullptr, 0);
 		if (requiredCharCount > 0)
 		{

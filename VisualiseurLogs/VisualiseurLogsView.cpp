@@ -44,6 +44,17 @@ CVisualiseurLogsView::~CVisualiseurLogsView()
 {
 }
 
+/**
+ * @brief Configure les styles de la fenêtre d'affichage de liste avant sa création physique.
+ * 
+ * Cette surcharge est cruciale car elle applique :
+ * 1. Le style de rapport complet (LVS_REPORT) pour gérer les colonnes.
+ * 2. Le style virtuel (LVS_OWNERDATA) : empêche le stockage interne des données et active les notifications LVN_GETDISPINFO.
+ * 3. La sélection simple (LVS_SINGLESEL).
+ *
+ * @param cs Structure CREATESTRUCT contenant les paramètres de création de la fenêtre.
+ * @return BOOL TRUE si la pré-création est validée, FALSE sinon.
+ */
 BOOL CVisualiseurLogsView::PreCreateWindow(CREATESTRUCT& cs)
 {
 	cs.style &= ~LVS_TYPEMASK;
@@ -52,6 +63,13 @@ BOOL CVisualiseurLogsView::PreCreateWindow(CREATESTRUCT& cs)
 	return CListView::PreCreateWindow(cs);
 }
 
+/**
+ * @brief Initialise le composant graphique de liste après sa création.
+ * 
+ * Configure les styles étendus (LVS_EX_FULLROWSELECT pour sélectionner toute la ligne,
+ * LVS_EX_GRIDLINES pour afficher le quadrillage, LVS_EX_DOUBLEBUFFER contre le scintillement).
+ * Insère également les deux colonnes principales ("Ligne" et "Message de Log").
+ */
 void CVisualiseurLogsView::OnInitialUpdate()
 {
 	CListView::OnInitialUpdate();
@@ -66,6 +84,16 @@ void CVisualiseurLogsView::OnInitialUpdate()
 	OnUpdate(nullptr, 0, nullptr);
 }
 
+/**
+ * @brief Surchargé pour synchroniser et rafraîchir l'affichage lorsque les données du document changent.
+ * 
+ * Récupère le nombre total de lignes indexées dans le document, l'applique au contrôle de liste virtuelle
+ * via SetItemCountEx (avec optimisations NOSCROLL/NOINVALIDATEALL), puis force le réaffichage avec Invalidate.
+ *
+ * @param pSender Pointeur vers la vue qui a initié l'action (nullptr par défaut).
+ * @param lHint Paramètre d'information spécifique (0 par défaut).
+ * @param pHint Objet d'information spécifique (nullptr par défaut).
+ */
 void CVisualiseurLogsView::OnUpdate(CView* pSender, LPARAM lHint, CObject* pHint)
 {
 	CVisualiseurLogsDoc* pDoc = GetDocument();
@@ -75,10 +103,23 @@ void CVisualiseurLogsView::OnUpdate(CView* pSender, LPARAM lHint, CObject* pHint
 		size_t lineCount = pDoc->GetLineCount();
 		
 		listCtrl.SetItemCountEx(static_cast<int>(lineCount), LVSICF_NOSCROLL | LVSICF_NOINVALIDATEALL);
+		
 		listCtrl.Invalidate();
 	}
 }
 
+/**
+ * @brief Intercepte la notification de dessin Win32 (LVN_GETDISPINFO) émise par le contrôle de liste virtuelle.
+ * 
+ * Cette méthode ultra-rapide n'est appelée par Windows que pour les éléments physiques visibles à l'écran :
+ * 1. Pour la colonne 0 : elle formate et injecte le numéro de ligne physique (index + 1).
+ * 2. Pour la colonne 1 : elle récupère le texte du log décodé depuis le document.
+ * 3. SÉCURITÉ : elle tronque dynamiquement à la taille maximale autorisée par le tampon Windows (pItem->cchTextMax)
+ *    pour éviter tout plantage (invalid parameter crash) avec des lignes géantes (> 10 000 car.).
+ *
+ * @param pNMHDR Pointeur vers l'entête du message de notification de contrôle standard.
+ * @param pResult Pointeur vers le résultat renvoyé par la procédure de fenêtre (0 par défaut).
+ */
 void CVisualiseurLogsView::OnGetDispInfo(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	auto pDispInfo = static_cast<NMLVDISPINFO*>(static_cast<void*>(pNMHDR));
@@ -87,23 +128,24 @@ void CVisualiseurLogsView::OnGetDispInfo(NMHDR* pNMHDR, LRESULT* pResult)
 	const CVisualiseurLogsDoc* pDoc = GetDocument();
 	if (pDoc != nullptr && (pItem->mask & LVIF_TEXT))
 	{
-		int index = pItem->iItem; // Index de la ligne demandée
+		int index = pItem->iItem; 
 
-		if (pItem->iSubItem == 0)
+		if (pItem->iSubItem == 0) // Colonne 0 : Affichage du numéro de ligne
 		{
 			CString strLineNum;
 			strLineNum.Format(_T("%u"), index + 1);
 			_tcscpy_s(pItem->pszText, pItem->cchTextMax, strLineNum);
 		}
-		else if (pItem->iSubItem == 1)
+		else if (pItem->iSubItem == 1) // Colonne 1 : Affichage du texte de log extrait à la demande
 		{
 			CString strLog = pDoc->GetLine(static_cast<size_t>(index));
 
-			// pItem->cchTextMax taille max du tampon fournie par Windows 
+			// Contrôle de la taille du tampon fournie par Windows (pItem->cchTextMax) pour les grandes lignes
 			if (strLog.GetLength() >= pItem->cchTextMax)
 			{
 				if (pItem->cchTextMax > 4)
 				{
+					// Troncature et ajout du suffixe "..." pour signifier un message tronqué
 					strLog = strLog.Left(pItem->cchTextMax - 4) + _T("...");
 				}
 				else
